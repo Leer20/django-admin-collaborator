@@ -51,6 +51,7 @@ setup(
     install_requires=[
         "Django>=3.2",
         "channels>=3.0.0",
+        "channels-redis>=4.0.0",
         "redis>=4.0.0",
     ],
     keywords="django, admin, realtime, collaboration, websockets, channels",

@@ -8,12 +8,14 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+import logging
 
-# Connect to Redis, using the REDIS_URL from settings or default
+logger = logging.getLogger(__name__)
+
 User = get_user_model()
 
 
-class AdminEditConsumer(AsyncWebsocketConsumer):
+class AdminCollaborationConsumer(AsyncWebsocketConsumer):
     """
     WebSocket consumer for real-time collaborative editing in Django admin.
 
@@ -206,7 +208,7 @@ class AdminEditConsumer(AsyncWebsocketConsumer):
                     self.channel_name
                 )
         except Exception as e:
-            print(f"Error in disconnect: {e}")
+            logger.exception(f"Error during disconnect: {e}")
 
     async def receive(self, text_data: str) -> None:
         """
@@ -232,7 +234,7 @@ class AdminEditConsumer(AsyncWebsocketConsumer):
             elif message_type == 'release_lock':
                 await self.handle_release_lock()
         except Exception as e:
-            print(f"Error in receive: {e}")
+            logger.exception(f"Error processing message: {e}")
 
     async def handle_editor_status_request(self) -> None:
         """

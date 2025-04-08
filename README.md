@@ -63,12 +63,13 @@ from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from channels.security.websocket import AllowedHostsOriginValidator
 
-from django_admin_collaborator.routing import websocket_urlpatterns
-
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'yourproject.settings')
 
+django_asgi_app = get_asgi_application()
+from django_admin_collaborator.routing import websocket_urlpatterns
+
 application = ProtocolTypeRouter({
-    'http': get_asgi_application(),
+    'http': django_asgi_app,
     'websocket': AllowedHostsOriginValidator(
         AuthMiddlewareStack(
             URLRouter(
@@ -96,6 +97,8 @@ class MyModelAdmin(CollaborativeAdminMixin, admin.ModelAdmin):
 
 ```bash
 daphne yourproject.asgi:application
+# OR
+uvicorn yourproject.asgi:application --host 0.0.0.0 --reload --reload-include '*.html'
 ```
 
 ## Advanced Usage
@@ -143,6 +146,15 @@ admin.site.register(
 )
 ```
 
-## License
+## Deployment on Heroku
+If you're deploying this application on Heroku, ensure that you configure the database connection settings appropriately to optimize performance. Specifically, Heroku may require you to set the `CONN_MAX_AGE` to 0 to avoid persistent database connections.
+Add the following to your settings.py file:
+```python
+if not DEBUG:
+    import django_heroku
+    django_heroku.settings(locals())
+    DATABASES['default']['CONN_MAX_AGE'] = 0
+```
 
+## License
 This project is licensed under the MIT License - see the LICENSE file for details.

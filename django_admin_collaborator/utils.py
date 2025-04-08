@@ -2,18 +2,21 @@ from typing import Any, Dict, Type
 
 from django.contrib import admin
 from django.db import models
+from django import forms
 
 
 class CollaborativeAdminMixin:
     """
     Mixin for ModelAdmin classes to enable collaborative editing.
-
     This mixin adds the necessary JavaScript to the admin interface
     for real-time collaboration features.
     """
 
-    class Media:
-        js = ('django_admin_collaborator/js/admin_edit.js',)
+    @property
+    def media(self):
+        extra = super().media
+        js = ['django_admin_collaborator/js/admin_edit.js']
+        return forms.Media(js=[*extra._js, *js])
 
 
 def make_collaborative(admin_class: Type[admin.ModelAdmin]) -> Type[admin.ModelAdmin]:

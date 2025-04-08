@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         var base_part = location.hostname + (location.port ? ':' + location.port : '');
-        let wssSource = `/admin-edit-consumer/${appLabel}/${modelName}/${objectId}/`
+        let wssSource = `/admin/collaboration/${appLabel}/${modelName}/${objectId}/`
         if (location.protocol === 'https:') {
             wssSource = "wss://" + base_part + wssSource;
         } else if (location.protocol === 'http:') {
