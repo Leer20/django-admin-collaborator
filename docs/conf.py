@@ -5,22 +5,26 @@
 
 import os
 import sys
-import django
 
 # Add the project root directory to the path so Sphinx can find the package
 sys.path.insert(0, os.path.abspath('..'))
 
-# Setup Django settings for autodoc
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'docs.settings')
-django.setup()
+# Setup Django settings for autodoc - with error handling
+try:
+    import django
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'docs.settings')
+    django.setup()
+except Exception as e:
+    print(f"Warning: Django setup failed: {e}")
+    print("Documentation will be built without Django integration.")
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Django Admin Collaborator'
-copyright = '2023-2025, Berkay Şen'
-author = 'Berkay Şen'
-release = '0.1.7'
+copyright = '2023-2025, Your Name'
+author = 'Your Name'
+release = '0.1.0'  # Replace with your actual version
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -32,6 +36,10 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx_rtd_theme',
 ]
+
+# Disable epub builder which requires imghdr (removed in Python 3.13)
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']

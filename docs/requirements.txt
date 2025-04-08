@@ -3,3 +3,4 @@ sphinx-rtd-theme>=1.0.0
 Django>=3.2
 channels>=3.0.0
 redis>=4.0.0
+python-imghdr>=0.1.0; python_version >= "3.13"
