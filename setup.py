@@ -15,6 +15,10 @@ with open('django_admin_collaborator/__init__.py', encoding='utf-8') as f:
     else:
         version = '0.1.8'
 
+project_urls = {
+  'Read The Docs': 'https://django-admin-collaborator.readthedocs.io/en/latest/',
+}
+
 setup(
     name="django-admin-collaborator",
     version=version,
@@ -55,4 +59,5 @@ setup(
         "redis>=4.0.0",
     ],
     keywords="django, admin, realtime, collaboration, websockets, channels",
+    project_urls=project_urls,
 )
