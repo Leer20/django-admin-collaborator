@@ -182,10 +182,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## Troubleshooting
-
-For common issues and solutions, please refer to the [Troubleshooting Guide](https://django-admin-collaborator.readthedocs.io/en/latest/troubleshooting.html) in our documentation.
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
