@@ -13,7 +13,7 @@ with open('django_admin_collaborator/__init__.py', encoding='utf-8') as f:
             version = line.split('=')[1].strip().strip("'").strip('"')
             break
     else:
-        version = '0.1.1'
+        version = '0.1.2'
 
 setup(
     name="django-admin-collaborator",
@@ -50,7 +50,7 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "Django>=3.2",
-        "channels>=3.0.0",
+        "channels==3.0.3",
         "channels-redis>=4.0.0",
         "redis>=4.0.0",
     ],

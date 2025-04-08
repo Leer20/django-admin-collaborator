@@ -1,272 +1,149 @@
-document.addEventListener('DOMContentLoaded', function () {
-    // Only run on admin change form
-    if (!document.getElementById('content-main') || !document.querySelector('.change-form')) {
-        return;
-    }
+/**
+ * Django Admin Collaborative Editor
+ * 
+ * This module implements real-time collaboration for Django admin change forms.
+ * It allows multiple users to see who is editing a page and prevents concurrent edits.
+ */
 
-    // Get the current URL path to extract info
+// Main initialization function - runs when DOM is fully loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Only initialize on admin change forms
+    if (!isAdminChangeForm()) return;
+
+    // Extract relevant information from the URL
+    const pathInfo = extractPathInfo();
+    if (!pathInfo) return;
+
+    // Initialize the collaborative editor with path information
+    const collaborativeEditor = new CollaborativeEditor(pathInfo);
+    collaborativeEditor.initialize();
+});
+
+/**
+ * Check if the current page is a Django admin change form
+ * @returns {boolean} True if on an admin change form, false otherwise
+ */
+function isAdminChangeForm() {
+    return document.getElementById('content-main') && 
+           document.querySelector('.change-form');
+}
+
+/**
+ * Extract app, model, and object ID from the URL path
+ * @returns {Object|null} Object containing appLabel, modelName, and objectId, or null if not found
+ */
+function extractPathInfo() {
     const path = window.location.pathname;
     const adminMatch = path.match(/\/admin\/(\w+)\/(\w+)\/(\w+)\/change\//);
 
-    if (!adminMatch) {
-        return;
+    if (!adminMatch) return null;
+
+    return {
+        appLabel: adminMatch[1],
+        modelName: adminMatch[2],
+        objectId: adminMatch[3]
+    };
+}
+
+/**
+ * UI Manager class
+ * Responsible for all DOM manipulations and UI updates
+ */
+class UIManager {
+    constructor() {
+        this.warningBanner = this.createWarningBanner();
+        this.userAvatarsContainer = this.createUserAvatarsContainer();
+        document.body.appendChild(this.warningBanner);
+        document.body.appendChild(this.userAvatarsContainer);
     }
 
-    const appLabel = adminMatch[1];
-    const modelName = adminMatch[2];
-    const objectId = adminMatch[3];
-
-    // Track the last modified timestamp to detect changes
-    let lastModifiedTimestamp = null;
-
-    // Create a warning banner for users without edit permissions (hidden by default)
-    const warningBanner = document.createElement('div');
-    warningBanner.id = 'edit-lock-warning';
-    warningBanner.style.display = 'none';
-    warningBanner.style.padding = '15px';
-    warningBanner.style.margin = '0';
-    warningBanner.style.fontSize = '15px';
-    warningBanner.style.fontWeight = 'bold';
-    warningBanner.style.position = 'fixed';
-    warningBanner.style.top = '0';
-    warningBanner.style.left = '0';
-    warningBanner.style.right = '0';
-    warningBanner.style.zIndex = '1000';
-    warningBanner.style.textAlign = 'center';
-    warningBanner.style.color = '#721c24';
-    warningBanner.style.backgroundColor = '#f8d7da';
-    warningBanner.style.borderBottom = '1px solid #f5c6cb';
-
-    // Add warning banner to the body (so it stays fixed at top)
-    document.body.appendChild(warningBanner);
-
-    // Create user avatars container
-    const userAvatarsContainer = document.createElement('div');
-    userAvatarsContainer.id = 'user-avatars-container';
-    userAvatarsContainer.style.position = 'fixed';
-    userAvatarsContainer.style.top = '5px';
-    userAvatarsContainer.style.right = '10px';
-    userAvatarsContainer.style.zIndex = '1001';
-    userAvatarsContainer.style.display = 'flex';
-    userAvatarsContainer.style.flexDirection = 'row-reverse'; // Right to left
-    userAvatarsContainer.style.gap = '5px';
-
-    // Add user avatars container to the body
-    document.body.appendChild(userAvatarsContainer);
-
-    // Variables to track editing state
-    let canEdit = false;
-    let currentEditor = null;
-    let currentEditorName = null;
-    let myUserId = null;
-    let myUsername = null;
-    let joinTimestamp = null;
-    let refreshTimer = null;
-    let reconnectTimer = null;
-    let activeUsers = {}; // will now store {id: {username, email}}
-    let reconnectAttempts = 0;
-    const MAX_RECONNECT_ATTEMPTS = 5;
-    let socket = null;
-
-    // Helper function to get UTC ISO timestamp
-    function getUTCTimestamp() {
-        return new Date().toISOString();
+    /**
+     * Create the warning banner element
+     * @returns {HTMLElement} The created warning banner
+     */
+    createWarningBanner() {
+        const banner = document.createElement('div');
+        banner.id = 'edit-lock-warning';
+        banner.style.display = 'none';
+        banner.style.padding = '15px';
+        banner.style.margin = '0';
+        banner.style.fontSize = '15px';
+        banner.style.fontWeight = 'bold';
+        banner.style.position = 'fixed';
+        banner.style.top = '0';
+        banner.style.left = '0';
+        banner.style.right = '0';
+        banner.style.zIndex = '1000';
+        banner.style.textAlign = 'center';
+        banner.style.color = '#721c24';
+        banner.style.backgroundColor = '#f8d7da';
+        banner.style.borderBottom = '1px solid #f5c6cb';
+        return banner;
     }
 
-    // Helper function to compare timestamps
-    function isTimeAfter(time1, time2) {
-        return new Date(time1) > new Date(time2);
+    /**
+     * Create the user avatars container element
+     * @returns {HTMLElement} The created avatars container
+     */
+    createUserAvatarsContainer() {
+        const container = document.createElement('div');
+        container.id = 'user-avatars-container';
+        container.style.position = 'fixed';
+        container.style.top = '5px';
+        container.style.right = '10px';
+        container.style.zIndex = '1001';
+        container.style.display = 'flex';
+        container.style.flexDirection = 'row-reverse'; // Right to left
+        container.style.gap = '5px';
+        return container;
     }
 
-    function connectWebSocket() {
-        if (socket) {
-            // Close existing socket properly
-            socket.onclose = null; // Remove reconnect logic
-            socket.close();
-        }
-
-        var base_part = location.hostname + (location.port ? ':' + location.port : '');
-        let wssSource = `/admin/collaboration/${appLabel}/${modelName}/${objectId}/`
-        if (location.protocol === 'https:') {
-            wssSource = "wss://" + base_part + wssSource;
-        } else if (location.protocol === 'http:') {
-            wssSource = "ws://" + base_part + wssSource;
-        }
-
-        socket = new WebSocket(wssSource);
-
-        socket.onopen = function (e) {
-            console.log('WebSocket connection established');
-            reconnectAttempts = 0; // Reset counter on successful connection
-
-            if (refreshTimer) {
-                clearTimeout(refreshTimer);
-                refreshTimer = null;
-            }
-        };
-
-        socket.onmessage = function (e) {
-            const data = JSON.parse(e.data);
-
-            if (data.type === 'user_joined') {
-                handleUserJoined(data);
-            } else if (data.type === 'user_left') {
-                handleUserLeft(data);
-            } else if (data.type === 'editor_status') {
-                handleEditorStatus(data);
-            } else if (data.type === 'content_updated') {
-                handleContentUpdated(data);
-            } else if (data.type === 'lock_released') {
-                handleLockReleased(data);
-            }
-        };
-
-        socket.onclose = function (e) {
-            console.log('WebSocket connection closed');
-
-            // Try to reconnect a limited number of times if not deliberately closed
-            if (!window.isNavigatingAway && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                reconnectAttempts++;
-                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff with 30s max
-
-                showWarningMessage(`Connection lost. Trying to reconnect... (Attempt ${reconnectAttempts})`);
-
-                if (reconnectTimer) {
-                    clearTimeout(reconnectTimer);
-                }
-
-                reconnectTimer = setTimeout(connectWebSocket, delay);
-            } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-                showWarningMessage('Connection lost. Please refresh the page manually.');
-            }
-        };
-
-        socket.onerror = function (e) {
-            console.error('WebSocket error:', e);
-        };
-    }
-
-    // Initial connection
-    connectWebSocket();
-
-    function handleUserJoined(data) {
-        if (!myUserId) {
-            myUserId = data.user_id;
-            myUsername = data.username;
-            joinTimestamp = new Date(data.timestamp);
-            lastModifiedTimestamp = data.last_modified;
-
-            socket.send(JSON.stringify({
-                'type': 'request_editor_status',
-                'timestamp': getUTCTimestamp()
-            }));
-        } else if (data.user_id !== myUserId) {
-            // Store user info with email
-            activeUsers[data.user_id] = {
-                username: data.username,
-                email: data.email
-            };
-
-            // Add avatar for new user
-            addUserAvatar(data.user_id, data.username, data.email);
-        }
-    }
-
-    function handleUserLeft(data) {
-        if (data.user_id in activeUsers) {
-            delete activeUsers[data.user_id];
-            // Remove user avatar
-            const userAvatar = document.getElementById(`user-avatar-${data.user_id}`);
-            if (userAvatar) {
-                userAvatar.remove();
-            }
-        }
-
-        if (data.user_id === currentEditor && currentEditor !== myUserId) {
-            showWarningMessage('The editor has left. The page will refresh shortly to allow editing.');
-            clearTimeout(refreshTimer);
-            refreshTimer = setTimeout(function () {
-                window.location.reload();
-            }, 2000);
-        }
-    }
-
-    function handleEditorStatus(data) {
-        currentEditor = data.editor_id;
-        currentEditorName = data.editor_name;
-
-        // Update all existing avatars to reflect editor status
-        updateAvatarEditorStatus();
-
-        if (currentEditor === myUserId) {
-            canEdit = true;
-            showSuccessMessage(`You are in editor mode.`);
-            enableForm();
-        } else if (currentEditor) {
-            canEdit = false;
-            showWarningMessage(`This page is being edited by ${data.editor_name}. You cannot make changes until they leave.`);
-            disableForm();
-        } else {
-            socket.send(JSON.stringify({
-                'type': 'claim_editor',
-                'timestamp': getUTCTimestamp()
-            }));
-        }
-    }
-
-    function handleContentUpdated(data) {
-        if (currentEditor !== myUserId) {
-            showWarningMessage('The content has been updated. The page will refresh shortly.');
-
-            if (!lastModifiedTimestamp || isTimeAfter(data.timestamp, lastModifiedTimestamp)) {
-                lastModifiedTimestamp = data.timestamp;
-                clearTimeout(refreshTimer);
-                refreshTimer = setTimeout(function () {
-                    window.location.reload();
-                }, 2000);
-            }
-        }
-    }
-
-    function handleLockReleased(data) {
-        if (currentEditor !== myUserId) {
-            showWarningMessage('The editor has finished editing. The page will refresh to allow you to edit.');
-
-            clearTimeout(refreshTimer);
-            refreshTimer = setTimeout(function () {
-                window.location.reload();
-            }, 2000);
-        }
-    }
-
-    function showWarningMessage(message) {
-        warningBanner.textContent = message;
-        warningBanner.style.display = 'block';
-        warningBanner.style.backgroundColor = '#f8d7da';
-        warningBanner.style.color = '#721c24';
-        warningBanner.style.borderBottom = '1px solid #f5c6cb';
-
+    /**
+     * Show a warning message to the user
+     * @param {string} message - The message to display
+     */
+    showWarningMessage(message) {
+        this.warningBanner.textContent = message;
+        this.warningBanner.style.display = 'block';
+        this.warningBanner.style.backgroundColor = '#f8d7da';
+        this.warningBanner.style.color = '#721c24';
+        this.warningBanner.style.borderBottom = '1px solid #f5c6cb';
+        
         // Adjust body padding to prevent content from being hidden under the warning
-        document.body.style.paddingTop = warningBanner.offsetHeight + 'px';
+        document.body.style.paddingTop = this.warningBanner.offsetHeight + 'px';
     }
 
-    function showSuccessMessage(message) {
-        warningBanner.textContent = message;
-        warningBanner.style.display = 'block';
-        warningBanner.style.backgroundColor = '#d4edda';
-        warningBanner.style.color = '#155724';
-        warningBanner.style.borderBottom = '1px solid #c3e6cb';
-
+    /**
+     * Show a success message to the user
+     * @param {string} message - The message to display
+     */
+    showSuccessMessage(message) {
+        this.warningBanner.textContent = message;
+        this.warningBanner.style.display = 'block';
+        this.warningBanner.style.backgroundColor = '#d4edda';
+        this.warningBanner.style.color = '#155724';
+        this.warningBanner.style.borderBottom = '1px solid #c3e6cb';
+        
         // Adjust body padding to prevent content from being hidden under the warning
-        document.body.style.paddingTop = warningBanner.offsetHeight + 'px';
+        document.body.style.paddingTop = this.warningBanner.offsetHeight + 'px';
     }
 
-    function hideWarningMessage() {
-        warningBanner.style.display = 'none';
+    /**
+     * Hide the warning message
+     */
+    hideWarningMessage() {
+        this.warningBanner.style.display = 'none';
         document.body.style.paddingTop = '0';
     }
 
-    function addUserAvatar(userId, username, email) {
+    /**
+     * Add a user avatar to the container
+     * @param {string} userId - The user's ID
+     * @param {string} username - The user's username
+     * @param {string} email - The user's email
+     * @param {boolean} isEditor - Whether this user is the current editor
+     */
+    addUserAvatar(userId, username, email, isEditor) {
         // Check if avatar already exists
         if (document.getElementById(`user-avatar-${userId}`)) {
             return;
@@ -277,7 +154,7 @@ document.addEventListener('DOMContentLoaded', function () {
         avatar.id = `user-avatar-${userId}`;
         avatar.className = 'user-avatar';
         avatar.setAttribute('data-user-id', userId);
-        avatar.setAttribute('title', `${username}`);
+        avatar.setAttribute('title', username);
 
         // Avatar styling
         avatar.style.width = '36px';
@@ -292,14 +169,8 @@ document.addEventListener('DOMContentLoaded', function () {
         avatar.style.textTransform = 'uppercase';
         avatar.style.position = 'relative';
 
-        // Set background color - editor gets different color
-        if (userId === currentEditor) {
-            avatar.style.backgroundColor = '#28a745'; // Green for editor
-            avatar.style.border = '2px solid #20c997';
-        } else {
-            avatar.style.backgroundColor = '#007bff'; // Blue for viewers
-            avatar.style.border = '2px solid #0056b3';
-        }
+        // Set background color based on editor status
+        this.updateAvatarStyle(avatar, isEditor);
 
         // Add first letter of username
         avatar.textContent = username.charAt(0);
@@ -307,7 +178,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Create and append tooltip
         const tooltip = document.createElement('div');
         tooltip.className = 'avatar-tooltip';
-        tooltip.textContent = `${username}`;
+        tooltip.textContent = username;
         tooltip.style.position = 'absolute';
         tooltip.style.bottom = '-30px';
         tooltip.style.right = '0';
@@ -332,28 +203,54 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // Add avatar to container
-        userAvatarsContainer.appendChild(avatar);
+        this.userAvatarsContainer.appendChild(avatar);
     }
 
-    function updateAvatarEditorStatus() {
-        // Update all avatars to reflect current editor status
+    /**
+     * Remove a user's avatar from the container
+     * @param {string} userId - The ID of the user whose avatar to remove
+     */
+    removeUserAvatar(userId) {
+        const userAvatar = document.getElementById(`user-avatar-${userId}`);
+        if (userAvatar) {
+            userAvatar.remove();
+        }
+    }
+
+    /**
+     * Update the styling of an avatar based on editor status
+     * @param {HTMLElement} avatar - The avatar element to update
+     * @param {boolean} isEditor - Whether this user is the current editor
+     */
+    updateAvatarStyle(avatar, isEditor) {
+        if (isEditor) {
+            avatar.style.backgroundColor = '#28a745'; // Green for editor
+            avatar.style.border = '2px solid #20c997';
+        } else {
+            avatar.style.backgroundColor = '#007bff'; // Blue for viewers
+            avatar.style.border = '2px solid #0056b3';
+        }
+    }
+
+    /**
+     * Update all avatars to reflect the current editor
+     * @param {string} editorId - The ID of the current editor
+     */
+    updateAllAvatars(editorId) {
         document.querySelectorAll('.user-avatar').forEach(avatar => {
             const userId = avatar.getAttribute('data-user-id');
-
-            if (userId == currentEditor) {
-                avatar.style.backgroundColor = '#28a745'; // Green for editor
-                avatar.style.border = '2px solid #20c997';
-            } else {
-                avatar.style.backgroundColor = '#007bff'; // Blue for viewers
-                avatar.style.border = '2px solid #0056b3';
-            }
+            this.updateAvatarStyle(avatar, userId == editorId);
         });
     }
 
-    function disableForm() {
+    /**
+     * Disable the form to prevent editing
+     */
+    disableForm() {
         const form = document.querySelector('#content-main form');
         if (!form) return;
 
+        // Disable form elements
         const elements = form.querySelectorAll('input, select, textarea, button');
         elements.forEach(element => {
             element.disabled = true;
@@ -361,21 +258,29 @@ document.addEventListener('DOMContentLoaded', function () {
             element.style.cursor = 'not-allowed';
         });
 
+        // Hide submit row
         const submitRow = document.querySelector('.submit-row');
         if (submitRow) {
             submitRow.style.display = 'none';
         }
 
+        // Disable admin links
         document.querySelectorAll('a.addlink, a.changelink, a.deletelink').forEach(link => {
             link.style.pointerEvents = 'none';
             link.style.opacity = '0.5';
         });
     }
 
-    function enableForm() {
+    /**
+     * Enable the form for editing
+     * @param {Function} submitCallback - Callback for form submission
+     * @param {Function} saveCallback - Callback for save button clicks
+     */
+    enableForm(submitCallback, saveCallback) {
         const form = document.querySelector('#content-main form');
         if (!form) return;
 
+        // Enable form elements
         const elements = form.querySelectorAll('input, select, textarea, button');
         elements.forEach(element => {
             element.disabled = false;
@@ -383,59 +288,458 @@ document.addEventListener('DOMContentLoaded', function () {
             element.style.cursor = '';
         });
 
+        // Show submit row
         const submitRow = document.querySelector('.submit-row');
         if (submitRow) {
             submitRow.style.display = 'flex';
         }
 
+        // Enable admin links
         document.querySelectorAll('a.addlink, a.changelink, a.deletelink').forEach(link => {
             link.style.pointerEvents = '';
             link.style.opacity = '';
         });
 
-        form.addEventListener('submit', function () {
-            socket.send(JSON.stringify({
-                'type': 'content_updated',
-                'timestamp': getUTCTimestamp()
-            }));
-        });
+        // Add form submission handler
+        form.addEventListener('submit', submitCallback);
 
+        // Add save button handlers
         const saveButtons = document.querySelectorAll('input[name="_continue"], input[name="_save"]');
         saveButtons.forEach(button => {
-            button.addEventListener('click', function () {
-                window.isNavigatingAway = true;
-                socket.send(JSON.stringify({
-                    'type': 'release_lock'
-                }));
-            });
+            button.addEventListener('click', saveCallback);
+        });
+    }
+}
+
+/**
+ * WebSocket Communication Manager
+ * Responsible for handling all WebSocket communications
+ */
+class WebSocketManager {
+    /**
+     * @param {Object} pathInfo - Object containing appLabel, modelName, and objectId
+     * @param {Object} handlers - Event handler functions
+     */
+    constructor(pathInfo, handlers) {
+        this.pathInfo = pathInfo;
+        this.handlers = handlers;
+        this.socket = null;
+        this.reconnectAttempts = 0;
+        this.reconnectTimer = null;
+        this.MAX_RECONNECT_ATTEMPTS = 5;
+        this.isNavigatingAway = false;
+    }
+
+    /**
+     * Connect to the WebSocket server
+     */
+    connect() {
+        if (this.socket) {
+            // Close existing socket properly
+            this.socket.onclose = null; // Remove reconnect logic
+            this.socket.close();
+        }
+
+        const base_part = location.hostname + (location.port ? ':' + location.port : '');
+        const { appLabel, modelName, objectId } = this.pathInfo;
+        let wssSource = `/admin/collaboration/${appLabel}/${modelName}/${objectId}/`;
+        
+        if (location.protocol === 'https:') {
+            wssSource = "wss://" + base_part + wssSource;
+        } else if (location.protocol === 'http:') {
+            wssSource = "ws://" + base_part + wssSource;
+        }
+
+        this.socket = new WebSocket(wssSource);
+        this.setupEventHandlers();
+    }
+
+    /**
+     * Set up WebSocket event handlers
+     */
+    setupEventHandlers() {
+        this.socket.onopen = () => {
+            console.log('WebSocket connection established');
+            this.reconnectAttempts = 0; // Reset counter on successful connection
+        };
+
+        this.socket.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            this.handleMessage(data);
+        };
+
+        this.socket.onclose = (e) => {
+            console.log('WebSocket connection closed');
+
+            // Try to reconnect if not deliberately closed
+            if (!this.isNavigatingAway && this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+                this.attemptReconnect();
+            } else if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+                if (this.handlers.onMaxReconnectAttemptsReached) {
+                    this.handlers.onMaxReconnectAttemptsReached();
+                }
+            }
+        };
+
+        this.socket.onerror = (e) => {
+            console.error('WebSocket error:', e);
+        };
+    }
+
+    /**
+     * Handle incoming WebSocket messages
+     * @param {Object} data - The parsed message data
+     */
+    handleMessage(data) {
+        switch (data.type) {
+            case 'user_joined':
+                if (this.handlers.onUserJoined) {
+                    this.handlers.onUserJoined(data);
+                }
+                break;
+            case 'user_left':
+                if (this.handlers.onUserLeft) {
+                    this.handlers.onUserLeft(data);
+                }
+                break;
+            case 'editor_status':
+                if (this.handlers.onEditorStatus) {
+                    this.handlers.onEditorStatus(data);
+                }
+                break;
+            case 'content_updated':
+                if (this.handlers.onContentUpdated) {
+                    this.handlers.onContentUpdated(data);
+                }
+                break;
+            case 'lock_released':
+                if (this.handlers.onLockReleased) {
+                    this.handlers.onLockReleased(data);
+                }
+                break;
+        }
+    }
+
+    /**
+     * Attempt to reconnect to the WebSocket server
+     */
+    attemptReconnect() {
+        this.reconnectAttempts++;
+        const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000); // Exponential backoff with 30s max
+
+        if (this.handlers.onReconnectAttempt) {
+            this.handlers.onReconnectAttempt(this.reconnectAttempts);
+        }
+
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+        }
+
+        this.reconnectTimer = setTimeout(() => this.connect(), delay);
+    }
+
+    /**
+     * Send a message to the WebSocket server
+     * @param {Object} message - The message to send
+     */
+    sendMessage(message) {
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify(message));
+        }
+    }
+
+    /**
+     * Request the current editor status
+     */
+    requestEditorStatus() {
+        this.sendMessage({
+            'type': 'request_editor_status',
+            'timestamp': getUTCTimestamp()
         });
     }
 
-    // Send heartbeat every 30 seconds to maintain our editor status
-    const heartbeatInterval = setInterval(function () {
-        if (canEdit && socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({
-                'type': 'heartbeat'
-            }));
-        }
-    }, 30000);
+    /**
+     * Claim editor status
+     */
+    claimEditor() {
+        this.sendMessage({
+            'type': 'claim_editor',
+            'timestamp': getUTCTimestamp()
+        });
+    }
 
-    // Clean up when navigating away
-    window.addEventListener('beforeunload', function () {
-        window.isNavigatingAway = true;
-        clearInterval(heartbeatInterval);
-        clearTimeout(refreshTimer);
-        clearTimeout(reconnectTimer);
+    /**
+     * Send a content updated notification
+     */
+    notifyContentUpdated() {
+        this.sendMessage({
+            'type': 'content_updated',
+            'timestamp': getUTCTimestamp()
+        });
+    }
 
-        if (canEdit && socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({
-                'type': 'release_lock'
-            }));
+    /**
+     * Release the editing lock
+     */
+    releaseLock() {
+        this.isNavigatingAway = true;
+        this.sendMessage({
+            'type': 'release_lock'
+        });
+    }
+
+    /**
+     * Send a heartbeat message to maintain editor status
+     */
+    sendHeartbeat() {
+        this.sendMessage({
+            'type': 'heartbeat'
+        });
+    }
+
+    /**
+     * Cleanup resources before page unload
+     */
+    cleanup() {
+        this.isNavigatingAway = true;
+        
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
         }
 
-        if (socket) {
-            socket.onclose = null; // Remove reconnect logic
-            socket.close();
+        if (this.socket) {
+            this.socket.onclose = null; // Remove reconnect logic
+            this.socket.close();
         }
-    });
-});
+    }
+}
+
+/**
+ * Main Collaborative Editor class
+ * Coordinates communication and UI updates
+ */
+class CollaborativeEditor {
+    /**
+     * @param {Object} pathInfo - Object containing appLabel, modelName, and objectId
+     */
+    constructor(pathInfo) {
+        this.pathInfo = pathInfo;
+        this.uiManager = new UIManager();
+        
+        // State variables
+        this.myUserId = null;
+        this.myUsername = null;
+        this.currentEditor = null;
+        this.currentEditorName = null;
+        this.lastModifiedTimestamp = null;
+        this.canEdit = false;
+        this.joinTimestamp = null;
+        this.activeUsers = {}; // Stores {id: {username, email}}
+        this.refreshTimer = null;
+        this.heartbeatInterval = null;
+        
+        // Create WebSocket manager with handlers
+        this.wsManager = new WebSocketManager(pathInfo, {
+            onUserJoined: this.handleUserJoined.bind(this),
+            onUserLeft: this.handleUserLeft.bind(this),
+            onEditorStatus: this.handleEditorStatus.bind(this),
+            onContentUpdated: this.handleContentUpdated.bind(this),
+            onLockReleased: this.handleLockReleased.bind(this),
+            onReconnectAttempt: this.handleReconnectAttempt.bind(this),
+            onMaxReconnectAttemptsReached: this.handleMaxReconnectAttemptsReached.bind(this)
+        });
+    }
+
+    /**
+     * Initialize the collaborative editor
+     */
+    initialize() {
+        // Connect to WebSocket
+        this.wsManager.connect();
+        
+        // Set up page unload handler
+        window.addEventListener('beforeunload', this.handleBeforeUnload.bind(this));
+        
+        // Start heartbeat for maintaining editor status
+        this.startHeartbeat();
+    }
+
+    /**
+     * Start heartbeat interval to maintain editor status
+     */
+    startHeartbeat() {
+        this.heartbeatInterval = setInterval(() => {
+            if (this.canEdit) {
+                this.wsManager.sendHeartbeat();
+            }
+        }, 30000); // Send heartbeat every 30 seconds
+    }
+
+    /**
+     * Handle a user joining the session
+     * @param {Object} data - User joined message data
+     */
+    handleUserJoined(data) {
+        if (!this.myUserId) {
+            // This is our own join message
+            this.myUserId = data.user_id;
+            this.myUsername = data.username;
+            this.joinTimestamp = new Date(data.timestamp);
+            this.lastModifiedTimestamp = data.last_modified;
+            
+            // Request current editor status
+            this.wsManager.requestEditorStatus();
+        } else if (data.user_id !== this.myUserId) {
+            // Another user joined
+            this.activeUsers[data.user_id] = {
+                username: data.username,
+                email: data.email
+            };
+            
+            // Add avatar for the new user
+            this.uiManager.addUserAvatar(
+                data.user_id, 
+                data.username, 
+                data.email, 
+                data.user_id === this.currentEditor
+            );
+        }
+    }
+
+    /**
+     * Handle a user leaving the session
+     * @param {Object} data - User left message data
+     */
+    handleUserLeft(data) {
+        if (data.user_id in this.activeUsers) {
+            delete this.activeUsers[data.user_id];
+            this.uiManager.removeUserAvatar(data.user_id);
+        }
+
+        if (data.user_id === this.currentEditor && this.currentEditor !== this.myUserId) {
+            this.uiManager.showWarningMessage('The editor has left. The page will refresh shortly to allow editing.');
+            this.scheduleRefresh();
+        }
+    }
+
+    /**
+     * Handle editor status update
+     * @param {Object} data - Editor status message data
+     */
+    handleEditorStatus(data) {
+        this.currentEditor = data.editor_id;
+        this.currentEditorName = data.editor_name;
+        
+        // Update avatars to reflect editor status
+        this.uiManager.updateAllAvatars(this.currentEditor);
+
+        if (this.currentEditor === this.myUserId) {
+            // We are the editor
+            this.canEdit = true;
+            this.uiManager.showSuccessMessage(`You are in editor mode.`);
+            this.uiManager.enableForm(
+                // Submit callback
+                () => this.wsManager.notifyContentUpdated(),
+                // Save button callback
+                () => this.wsManager.releaseLock()
+            );
+        } else if (this.currentEditor) {
+            // Someone else is editing
+            this.canEdit = false;
+            this.uiManager.showWarningMessage(
+                `This page is being edited by ${data.editor_name}. You cannot make changes until they leave.`
+            );
+            this.uiManager.disableForm();
+        } else {
+            // No editor, try to claim editor status
+            this.wsManager.claimEditor();
+        }
+    }
+
+    /**
+     * Handle content updated message
+     * @param {Object} data - Content updated message data
+     */
+    handleContentUpdated(data) {
+        if (this.currentEditor !== this.myUserId) {
+            this.uiManager.showWarningMessage('The content has been updated. The page will refresh shortly.');
+
+            if (!this.lastModifiedTimestamp || isTimeAfter(data.timestamp, this.lastModifiedTimestamp)) {
+                this.lastModifiedTimestamp = data.timestamp;
+                this.scheduleRefresh();
+            }
+        }
+    }
+
+    /**
+     * Handle lock released message
+     * @param {Object} data - Lock released message data
+     */
+    handleLockReleased(data) {
+        if (this.currentEditor !== this.myUserId) {
+            this.uiManager.showWarningMessage('The editor has finished editing. The page will refresh to allow you to edit.');
+            this.scheduleRefresh();
+        }
+    }
+
+    /**
+     * Handle reconnection attempt
+     * @param {number} attemptNumber - The current reconnection attempt number
+     */
+    handleReconnectAttempt(attemptNumber) {
+        this.uiManager.showWarningMessage(`Connection lost. Trying to reconnect... (Attempt ${attemptNumber})`);
+    }
+
+    /**
+     * Handle reaching maximum reconnection attempts
+     */
+    handleMaxReconnectAttemptsReached() {
+        this.uiManager.showWarningMessage('Connection lost. Please refresh the page manually.');
+    }
+
+    /**
+     * Schedule a page refresh
+     */
+    scheduleRefresh() {
+        clearTimeout(this.refreshTimer);
+        this.refreshTimer = setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+    }
+
+    /**
+     * Handle the page being unloaded
+     */
+    handleBeforeUnload() {
+        // Clean up resources
+        clearInterval(this.heartbeatInterval);
+        clearTimeout(this.refreshTimer);
+        
+        // Release lock if we're the editor
+        if (this.canEdit) {
+            this.wsManager.releaseLock();
+        }
+        
+        // Clean up WebSocket
+        this.wsManager.cleanup();
+    }
+}
+
+/**
+ * Helper function to get UTC ISO timestamp
+ * @returns {string} Current UTC timestamp in ISO format
+ */
+function getUTCTimestamp() {
+    return new Date().toISOString();
+}
+
+/**
+ * Helper function to compare timestamps
+ * @param {string} time1 - First timestamp to compare
+ * @param {string} time2 - Second timestamp to compare
+ * @returns {boolean} True if time1 is later than time2
+ */
+function isTimeAfter(time1, time2) {
+    return new Date(time1) > new Date(time2);
+}
