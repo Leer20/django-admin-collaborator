@@ -22,9 +22,9 @@ except Exception as e:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Django Admin Collaborator'
-copyright = '2023-2025, Your Name'
-author = 'Your Name'
-release = '0.1.0'  # Replace with your actual version
+copyright = '2023-2025, Berkay Şen'
+author = 'Berkay Şen'
+release = '0.1.7'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

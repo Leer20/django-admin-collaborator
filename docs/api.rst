@@ -23,19 +23,3 @@ WebSocket Consumers
    :members:
    :undoc-members:
    :show-inheritance:
-
-Lock Management
--------------
-
-.. autoclass:: django_admin_collaborator.locks.LockManager
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Signals
-------
-
-.. automodule:: django_admin_collaborator.signals
-   :members:
-   :undoc-members:
-   :show-inheritance:

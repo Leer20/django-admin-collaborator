@@ -64,19 +64,3 @@ You can use the factory function to create admin classes dynamically:
             }
         )
     )
-
-Customizing the Collaboration Behavior
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-You can customize various aspects of the collaboration behavior by overriding settings in your Django settings:
-
-.. code-block:: python
-
-    # Lock timeout in seconds (default: 60)
-    ADMIN_COLLABORATOR_LOCK_TIMEOUT = 120
-
-    # Heartbeat interval in seconds (default: 10)
-    ADMIN_COLLABORATOR_HEARTBEAT_INTERVAL = 15
-
-    # Maximum number of users shown in the "currently viewing" list (default: 5)
-    ADMIN_COLLABORATOR_MAX_VISIBLE_USERS = 10
