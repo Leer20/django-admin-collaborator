@@ -1,6 +1,7 @@
 """Template tags for Django Admin Collaborator."""
 
 from django import template
+from django.templatetags.static import static
 from django.utils.safestring import mark_safe
 
 register = template.Library()
@@ -34,6 +35,5 @@ def admin_collaborator_scripts():
     Returns:
         HTML script tag for the admin_edit.js file
     """
-    return mark_safe(
-        '<script src="/static/django_admin_collaborator/js/admin_edit.js"></script>'
-    )
+    script_url = static('django_admin_collaborator/js/admin_edit.js')
+    return mark_safe(f'<script src="{script_url}"></script>')
