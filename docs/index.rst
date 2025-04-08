@@ -13,29 +13,6 @@ Overview
 Django Admin Collaborator enables real-time collaboration in Django admin interfaces,
 allowing multiple users to work together on the same admin objects simultaneously.
 
-Contents
---------
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Documentation
-
-   installation
-   usage
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Reference
-
-   api
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Development
-
-   contributing
-   changelog
-
 Features
 --------
 
@@ -45,10 +22,3 @@ Features
 * Seamless integration with Django admin - minimal configuration required
 * User avatars and status indicators - visual feedback on who's editing
 * Automatic page refresh when content changes - stay up to date without manual refreshes
-
-Indices and tables
-=================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

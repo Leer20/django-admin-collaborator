@@ -1,5 +1,11 @@
 # Django Admin Collaborator
 
+[![PyPI version](https://badge.fury.io/py/django-admin-collaborator.svg)](https://badge.fury.io/py/django-admin-collaborator)
+[![Python Versions](https://img.shields.io/pypi/pyversions/django-admin-collaborator.svg)](https://pypi.org/project/django-admin-collaborator/)
+[![Django Versions](https://img.shields.io/badge/django-3.2%2B-blue.svg)](https://www.djangoproject.com/)
+[![Documentation Status](https://readthedocs.org/projects/django-admin-collaborator/badge/?version=latest)](https://django-admin-collaborator.readthedocs.io/en/latest/?badge=latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Real-time collaborative editing for Django admin interfaces using WebSockets.
 
 ## Overview
@@ -7,12 +13,12 @@ Real-time collaborative editing for Django admin interfaces using WebSockets.
 
 ## Features
 
-- Real-time presence indicators - see who else is viewing the same object
-- Exclusive editing mode - prevents conflicts by allowing only one user to edit at a time
-- Automatic lock release - abandoned sessions automatically release editing privileges
-- Seamless integration with Django admin - minimal configuration required
-- User avatars and status indicators - visual feedback on who's editing
-- Automatic page refresh when content changes - stay up to date without manual refreshes
+- **Real-time presence indicators** - See who else is viewing the same object
+- **Exclusive editing mode** - Prevents conflicts by allowing only one user to edit at a time
+- **Automatic lock release** - Abandoned sessions automatically release editing privileges
+- **Seamless integration** with Django admin - Minimal configuration required
+- **User avatars and status indicators** - Visual feedback on who's editing
+- **Automatic page refresh** when content changes - Stay up to date without manual refreshes
 
 ## Requirements
 
@@ -104,6 +110,11 @@ daphne yourproject.asgi:application
 uvicorn yourproject.asgi:application --host 0.0.0.0 --reload --reload-include '*.html'
 ```
 
+## Documentation
+
+For complete documentation, please visit:
+- [Read the Docs](https://django-admin-collaborator.readthedocs.io/)
+
 ## Advanced Usage
 
 ### Applying to Multiple Admin Classes
@@ -150,7 +161,9 @@ admin.site.register(
 ```
 
 ## Deployment on Heroku
+
 If you're deploying this application on Heroku, ensure that you configure the database connection settings appropriately to optimize performance. Specifically, Heroku may require you to set the `CONN_MAX_AGE` to 0 to avoid persistent database connections.
+
 Add the following to your settings.py file:
 ```python
 if not DEBUG:
@@ -159,5 +172,26 @@ if not DEBUG:
     DATABASES['default']['CONN_MAX_AGE'] = 0
 ```
 
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Troubleshooting
+
+For common issues and solutions, please refer to the [Troubleshooting Guide](https://django-admin-collaborator.readthedocs.io/en/latest/troubleshooting.html) in our documentation.
+
 ## License
-This project is licensed under the MIT License - see the LICENSE file for details.
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Django team for their amazing framework
+- Channels team for WebSocket support
+- All contributors who have helped improve this package
