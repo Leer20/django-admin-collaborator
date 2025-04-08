@@ -2,6 +2,9 @@
 
 Real-time collaborative editing for Django admin interfaces using WebSockets.
 
+## Overview
+![Demo](https://raw.githubusercontent.com/Brktrlw/django-admin-collaborator/refs/heads/main/screenshots/demo.gif)
+
 ## Features
 
 - Real-time presence indicators - see who else is viewing the same object
