@@ -35,8 +35,8 @@ Basic Setup
 
    .. code-block:: python
 
-       # Optional: Configure Redis connection (defaults to localhost:6379/0)
-       ADMIN_COLLABORATOR_REDIS_URL = 'redis://localhost:6379/0'
+       # Configure Redis connection (defaults to localhost:6379/0)
+       ADMIN_COLLABORATOR_REDIS_URL = env.str("REDIS_URL")
 
        # Or use the same Redis URL you have for Channels if you're already using it
        CHANNEL_LAYERS = {
