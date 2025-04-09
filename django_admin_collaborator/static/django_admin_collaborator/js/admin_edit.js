@@ -1,9 +1,10 @@
 /**
  * Django Admin Collaborative Editor
- * 
+ *
  * This module implements real-time collaboration for Django admin change forms.
  * It allows multiple users to see who is editing a page and prevents concurrent edits.
  */
+
 
 // Main initialization function - runs when DOM is fully loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -24,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
  * @returns {boolean} True if on an admin change form, false otherwise
  */
 function isAdminChangeForm() {
-    return document.getElementById('content-main') && 
+    return document.getElementById('content-main') &&
            document.querySelector('.change-form');
 }
 
@@ -108,7 +109,7 @@ class UIManager {
         this.warningBanner.style.backgroundColor = '#f8d7da';
         this.warningBanner.style.color = '#721c24';
         this.warningBanner.style.borderBottom = '1px solid #f5c6cb';
-        
+
         // Adjust body padding to prevent content from being hidden under the warning
         document.body.style.paddingTop = this.warningBanner.offsetHeight + 'px';
     }
@@ -123,7 +124,7 @@ class UIManager {
         this.warningBanner.style.backgroundColor = '#d4edda';
         this.warningBanner.style.color = '#155724';
         this.warningBanner.style.borderBottom = '1px solid #c3e6cb';
-        
+
         // Adjust body padding to prevent content from being hidden under the warning
         document.body.style.paddingTop = this.warningBanner.offsetHeight + 'px';
     }
@@ -343,7 +344,7 @@ class WebSocketManager {
         const base_part = location.hostname + (location.port ? ':' + location.port : '');
         const { appLabel, modelName, objectId } = this.pathInfo;
         let wssSource = `/admin/collaboration/${appLabel}/${modelName}/${objectId}/`;
-        
+
         if (location.protocol === 'https:') {
             wssSource = "wss://" + base_part + wssSource;
         } else if (location.protocol === 'http:') {
@@ -502,7 +503,7 @@ class WebSocketManager {
      */
     cleanup() {
         this.isNavigatingAway = true;
-        
+
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
@@ -526,7 +527,7 @@ class CollaborativeEditor {
     constructor(pathInfo) {
         this.pathInfo = pathInfo;
         this.uiManager = new UIManager();
-        
+
         // State variables
         this.myUserId = null;
         this.myUsername = null;
@@ -538,7 +539,7 @@ class CollaborativeEditor {
         this.activeUsers = {}; // Stores {id: {username, email}}
         this.refreshTimer = null;
         this.heartbeatInterval = null;
-        
+
         // Create WebSocket manager with handlers
         this.wsManager = new WebSocketManager(pathInfo, {
             onUserJoined: this.handleUserJoined.bind(this),
@@ -557,10 +558,10 @@ class CollaborativeEditor {
     initialize() {
         // Connect to WebSocket
         this.wsManager.connect();
-        
+
         // Set up page unload handler
         window.addEventListener('beforeunload', this.handleBeforeUnload.bind(this));
-        
+
         // Start heartbeat for maintaining editor status
         this.startHeartbeat();
     }
@@ -587,7 +588,7 @@ class CollaborativeEditor {
             this.myUsername = data.username;
             this.joinTimestamp = new Date(data.timestamp);
             this.lastModifiedTimestamp = data.last_modified;
-            
+
             // Request current editor status
             this.wsManager.requestEditorStatus();
         } else if (data.user_id !== this.myUserId) {
@@ -596,12 +597,12 @@ class CollaborativeEditor {
                 username: data.username,
                 email: data.email
             };
-            
+
             // Add avatar for the new user
             this.uiManager.addUserAvatar(
-                data.user_id, 
-                data.username, 
-                data.email, 
+                data.user_id,
+                data.username,
+                data.email,
                 data.user_id === this.currentEditor
             );
         }
@@ -618,7 +619,7 @@ class CollaborativeEditor {
         }
 
         if (data.user_id === this.currentEditor && this.currentEditor !== this.myUserId) {
-            this.uiManager.showWarningMessage('The editor has left. The page will refresh shortly to allow editing.');
+            this.uiManager.showWarningMessage(window.ADMIN_COLLABORATOR_CLAIMING_EDITOR_TEXT);
             this.scheduleRefresh();
         }
     }
@@ -630,14 +631,14 @@ class CollaborativeEditor {
     handleEditorStatus(data) {
         this.currentEditor = data.editor_id;
         this.currentEditorName = data.editor_name;
-        
+
         // Update avatars to reflect editor status
         this.uiManager.updateAllAvatars(this.currentEditor);
 
         if (this.currentEditor === this.myUserId) {
             // We are the editor
             this.canEdit = true;
-            this.uiManager.showSuccessMessage(`You are in editor mode.`);
+            this.uiManager.showSuccessMessage(window.ADMIN_COLLABORATOR_EDITOR_MODE_TEXT);
             this.uiManager.enableForm(
                 // Submit callback
                 () => this.wsManager.notifyContentUpdated(),
@@ -647,9 +648,9 @@ class CollaborativeEditor {
         } else if (this.currentEditor) {
             // Someone else is editing
             this.canEdit = false;
-            this.uiManager.showWarningMessage(
-                `This page is being edited by ${data.editor_name}. You cannot make changes until they leave.`
-            );
+            let viewerModeText = window.ADMIN_COLLABORATOR_VIEWER_MODE_TEXT
+            viewerModeText = viewerModeText.replace('{editor_name}', data.editor_name);
+            this.uiManager.showWarningMessage(viewerModeText);
             this.uiManager.disableForm();
         } else {
             // No editor, try to claim editor status
@@ -715,12 +716,12 @@ class CollaborativeEditor {
         // Clean up resources
         clearInterval(this.heartbeatInterval);
         clearTimeout(this.refreshTimer);
-        
+
         // Release lock if we're the editor
         if (this.canEdit) {
             this.wsManager.releaseLock();
         }
-        
+
         // Clean up WebSocket
         this.wsManager.cleanup();
     }
