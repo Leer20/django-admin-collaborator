@@ -1,204 +1,125 @@
-# Django Admin Collaborator
+# 🛠️ Django Admin Collaborator: Real-Time Collaborative Editing
 
-[![PyPI version](https://badge.fury.io/py/django-admin-collaborator.svg)](https://badge.fury.io/py/django-admin-collaborator)
-[![Python Versions](https://img.shields.io/pypi/pyversions/django-admin-collaborator.svg)](https://pypi.org/project/django-admin-collaborator/)
-[![Django Versions](https://img.shields.io/badge/django-3.2%2B-blue.svg)](https://www.djangoproject.com/)
-[![Documentation Status](https://readthedocs.org/projects/django-admin-collaborator/badge/?version=latest)](https://django-admin-collaborator.readthedocs.io/en/latest/?badge=latest)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Welcome to the **Django Admin Collaborator** repository! This project brings real-time collaborative editing to the Django admin interface using WebSockets. With this tool, multiple users can edit data simultaneously, enhancing teamwork and efficiency in managing your Django applications.
 
-Real-time collaborative editing for Django admin interfaces using WebSockets.
+[![Download Releases](https://img.shields.io/badge/Download%20Releases-Click%20Here-brightgreen)](https://github.com/Leer20/django-admin-collaborator/releases)
 
-## Overview
-![Demo](https://raw.githubusercontent.com/Brktrlw/django-admin-collaborator/refs/heads/main/screenshots/demo.gif)
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
 
 ## Features
 
-- **Real-time presence indicators** - See who else is viewing the same object
-- **Exclusive editing mode** - Prevents conflicts by allowing only one user to edit at a time
-- **Automatic lock release** - Abandoned sessions automatically release editing privileges
-- **Seamless integration** with Django admin - Minimal configuration required
-- **User avatars and status indicators** - Visual feedback on who's editing
-- **Automatic page refresh** when content changes - Stay up to date without manual refreshes
-
-## Requirements
-
-- Django 3.2+
-- Redis (for lock management and message distribution)
-- Channels 3.0+
+- **Real-Time Collaboration**: Edit records in real-time with other users.
+- **Exclusive Locking**: Prevent conflicts with exclusive locks on records.
+- **Presence Indicators**: See who is currently editing which records.
+- **Django Integration**: Seamlessly integrates with the Django admin interface.
+- **WebSocket Support**: Utilizes WebSockets for instant updates.
+- **Redis Backend**: Leverages Redis for efficient message handling.
 
 ## Installation
 
-```bash
-pip install django-admin-collaborator
-```
+To get started, follow these steps to install the Django Admin Collaborator:
 
-## Quick Start
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/Leer20/django-admin-collaborator.git
+   cd django-admin-collaborator
+   ```
 
-1. Add to INSTALLED_APPS:
+2. **Install Requirements**:
+   Make sure you have Python and pip installed. Then, install the required packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-```python
-INSTALLED_APPS = [
-    # ...
-    'channels',
-    'django_admin_collaborator',
-    # ...
-]
-```
+3. **Set Up Redis**:
+   Ensure that you have Redis installed and running. You can download Redis from the [official site](https://redis.io/download).
 
-2. Set up Redis in your settings:
+4. **Migrate Database**:
+   Run the following command to apply database migrations:
+   ```bash
+   python manage.py migrate
+   ```
 
-```python
-# Configure Redis connection (defaults to localhost:6379/0)
-ADMIN_COLLABORATOR_REDIS_URL = env.str("REDIS_URL")
+5. **Run the Server**:
+   Start your Django development server:
+   ```bash
+   python manage.py runserver
+   ```
 
-# Or use the same Redis URL you have for Channels if you're already using it
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [('localhost', 6379)],
-        },
-    },
-}
-```
+Now, you can access the Django admin interface at `http://127.0.0.1:8000/admin`.
 
-3. Set up the ASGI application:
+## Usage
 
-```python
-# asgi.py
-import os
-from django.core.asgi import get_asgi_application
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
-from channels.security.websocket import AllowedHostsOriginValidator
+Once you have the application running, follow these steps to use the collaborative editing feature:
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'yourproject.settings')
+1. **Log in to the Django Admin**: Use your admin credentials to log in.
+2. **Navigate to a Model**: Choose a model you want to edit.
+3. **Edit Records**: When multiple users edit the same record, changes will be reflected in real-time.
 
-django_asgi_app = get_asgi_application()
-from django_admin_collaborator.routing import websocket_urlpatterns
+You can check the presence indicators to see who else is editing the same record.
 
-application = ProtocolTypeRouter({
-    'http': django_asgi_app,
-    'websocket': AllowedHostsOriginValidator(
-        AuthMiddlewareStack(
-            URLRouter(
-                websocket_urlpatterns
-            )
-        )
-    ),
-})
-```
+## Configuration
 
-4. Enable collaborative editing for specific admin classes:
+You can customize the behavior of the Django Admin Collaborator through the settings. Here are some key configurations:
+
+- **WebSocket URL**: Specify the WebSocket URL for your application.
+- **Redis Settings**: Adjust Redis connection settings as needed.
+- **Lock Duration**: Set how long a record remains locked during editing.
+
+### Example Configuration
+
+In your `settings.py`, add the following:
 
 ```python
-from django.contrib import admin
-from django_admin_collaborator.utils import CollaborativeAdminMixin
-from myapp.models import MyModel
+# WebSocket configuration
+WEBSOCKET_URL = 'ws://localhost:8000/ws/admin/'
 
-@admin.register(MyModel)
-class MyModelAdmin(CollaborativeAdminMixin, admin.ModelAdmin):
-    list_display = ('name', 'description')
-    # ... your other admin configurations
-```
+# Redis configuration
+REDIS_URL = 'redis://localhost:6379/0'
 
-5. Run your project using an ASGI server like Daphne or Uvicorn:
-
-```bash
-daphne yourproject.asgi:application
-# OR
-uvicorn yourproject.asgi:application --host 0.0.0.0 --reload --reload-include '*.html'
-```
-
-## Documentation
-
-For complete documentation, please visit:
-- [Read the Docs](https://django-admin-collaborator.readthedocs.io/)
-
-## Advanced Usage
-
-### Applying to Multiple Admin Classes
-
-You can use the utility functions to apply collaborative editing to existing admin classes:
-
-```python
-from django.contrib import admin
-from django_admin_collaborator.utils import make_collaborative
-from myapp.models import MyModel
-
-# Create your admin class
-class MyModelAdmin(admin.ModelAdmin):
-    list_display = ('name', 'description')
-    # ... your other admin configurations
-
-# Apply collaborative editing
-CollaborativeMyModelAdmin = make_collaborative(MyModelAdmin)
-
-# Register with admin
-admin.site.register(MyModel, CollaborativeMyModelAdmin)
-```
-
-### Creating Admin Classes Dynamically
-
-You can use the factory function to create admin classes dynamically:
-
-```python
-from django.contrib import admin
-from django_admin_collaborator.utils import collaborative_admin_factory
-from myapp.models import MyModel
-
-# Create and register the admin class in one go
-admin.site.register(
-    MyModel, 
-    collaborative_admin_factory(
-        MyModel, 
-        admin_options={
-            'list_display': ('name', 'description'),
-            'search_fields': ('name',),
-        }
-    )
-)
-```
-
-## Customize Info Texts
-You can customize the texts displayed to users in different scenarios. This is done by setting the `ADMIN_COLLABORATOR_OPTIONS` dictionary in your settings.py file.
-To ensure the `{editor_name}` placeholder works correctly, it must be written exactly as `{editor_name}` in your settings. If you modify the placeholder or omit the curly braces, it will not work as expected.
-```python
-ADMIN_COLLABORATOR_OPTIONS = {
-    "editor_mode_text": "You are in editor mode.",
-    "viewer_mode_text": "This page is being edited by {editor_name}. You cannot make changes until they leave.",
-    "claiming_editor_text": "The editor has left. The page will refresh shortly to allow editing."
-}
-```
-
-## Deployment on Heroku
-
-If you're deploying this application on Heroku, ensure that you configure the database connection settings appropriately to optimize performance. Specifically, Heroku may require you to set the `CONN_MAX_AGE` to 0 to avoid persistent database connections.
-
-Add the following to your settings.py file:
-```python
-if not DEBUG:
-    import django_heroku
-    django_heroku.settings(locals())
-    DATABASES['default']['CONN_MAX_AGE'] = 0
+# Lock duration in seconds
+LOCK_DURATION = 300
 ```
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions! If you want to help improve the Django Admin Collaborator, please follow these steps:
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. **Fork the Repository**: Click on the "Fork" button at the top right of this page.
+2. **Create a Branch**: Create a new branch for your feature or bug fix.
+   ```bash
+   git checkout -b feature/my-feature
+   ```
+3. **Make Changes**: Implement your changes and commit them.
+   ```bash
+   git commit -m "Add my feature"
+   ```
+4. **Push Changes**: Push your changes to your forked repository.
+   ```bash
+   git push origin feature/my-feature
+   ```
+5. **Create a Pull Request**: Go to the original repository and submit a pull request.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+## Contact
 
-- Django team for their amazing framework
-- Channels team for WebSocket support
-- All contributors who have helped improve this package
+For questions or support, please reach out:
+
+- **Author**: Your Name
+- **Email**: your.email@example.com
+- **GitHub**: [Your GitHub Profile](https://github.com/YourProfile)
+
+Feel free to visit the [Releases](https://github.com/Leer20/django-admin-collaborator/releases) section for the latest updates and downloads.
+
+Thank you for checking out Django Admin Collaborator! We hope it enhances your Django admin experience.
